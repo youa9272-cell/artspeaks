@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Art Speaks Where Words End</title>
+<meta name="description" content="Some feelings cannot be explained. Let them be felt. Share what you felt at the exhibition.">
+<meta name="theme-color" content="#F7F2E9">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="wrap">
+  <header class="hero">
+    <p class="eyebrow fade">An Exhibition</p>
+    <h1 class="fade d1">Art Speaks<br><em>Where Words End</em></h1>
+    <p class="sub fade d2">“Some feelings cannot be explained. Let them be felt.”</p>
+    <hr class="rule fade d3">
+  </header>
+
+  <form id="form" novalidate class="fade d3">
+    <div id="banner" class="banner" role="alert"></div>
+
+    <fieldset>
+      <legend>How did it feel?</legend>
+      <p class="hint">Choose the one that is closest.</p>
+      <div class="emotions" role="radiogroup">
+        <label class="chip"><input type="radio" name="emotion" value="peaceful"><span><b>🤍</b>Peaceful</span></label>
+        <label class="chip"><input type="radio" name="emotion" value="emotional"><span><b>🥹</b>Emotional</span></label>
+        <label class="chip"><input type="radio" name="emotion" value="inspired"><span><b>🤩</b>Inspired</span></label>
+        <label class="chip"><input type="radio" name="emotion" value="thoughtful"><span><b>💭</b>Thoughtful</span></label>
+        <label class="chip"><input type="radio" name="emotion" value="amazed"><span><b>😍</b>Amazed</span></label>
+        <label class="chip"><input type="radio" name="emotion" value="happy"><span><b>🙂</b>Happy</span></label>
+      </div>
+      <p class="err" id="err-emotion"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Your rating</legend>
+      <div class="stars" id="stars" role="radiogroup" aria-label="Rating from 1 to 5 stars"></div>
+      <p class="rate-text" id="rate-text" aria-live="polite"></p>
+      <p class="err" id="err-rating"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>What spoke to you?</legend>
+      <p class="hint">Choose any that apply. Optional.</p>
+      <div class="emotions">
+        <label class="chip"><input type="checkbox" name="spoke" value="artwork"><span>Artwork</span></label>
+        <label class="chip"><input type="checkbox" name="spoke" value="creativity"><span>Creativity</span></label>
+        <label class="chip"><input type="checkbox" name="spoke" value="concept"><span>Concept</span></label>
+        <label class="chip"><input type="checkbox" name="spoke" value="display"><span>Exhibition Display</span></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <label class="label" for="comment">In your own words</label>
+      <p class="hint">Optional. Say as much or as little as you like.</p>
+      <textarea id="comment" maxlength="1000" placeholder="What did you feel?"></textarea>
+      <div class="count"><span id="count">0</span>/1000</div>
+    </fieldset>
+
+    <fieldset>
+      <label class="label">Stay in touch</label>
+      <p class="hint">Completely optional. Leave this blank to stay anonymous.</p>
+      <div class="field"><label for="name">Name</label><input type="text" id="name" maxlength="80" autocomplete="name"></div>
+      <div class="field"><label for="contact">Email or phone number</label><input type="text" id="contact" maxlength="120" autocomplete="email" inputmode="email"></div>
+      <p class="err" id="err-contact"></p>
+    </fieldset>
+
+    <!-- spam trap: real people never see or fill this -->
+    <div class="hp" aria-hidden="true"><label>Website<input type="text" id="website" tabindex="-1" autocomplete="off"></label></div>
+
+    <p class="privacy"><strong>Your privacy.</strong> You do not need to share any personal details. Your feeling, rating and message are used only by the exhibition team to understand how visitors experienced the show. If you choose to add a name, email or phone number, it is used only to follow up with you about this exhibition, is visible only to the organiser, and is never sold or shared. To have your response deleted, message us on Instagram.</p>
+
+    <button class="btn" id="submit" type="submit"><span class="spinner"></span><span id="submit-label">LEAVE A PIECE OF YOURSELF ✨</span></button>
+  </form>
+
+  <section class="thanks" id="thanks" aria-live="polite">
+    <p class="msg">Thank you for feeling the art with us. The words may end here, but the emotions continue. 🤍</p>
+    <a class="btn" href="https://www.instagram.com/beyondword997/" target="_blank" rel="noopener noreferrer">THE STORY CONTINUES ↗</a>
+  </section>
+
+  <footer>ART SPEAKS WHERE WORDS END</footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+(function(){
+  var cfg = window.APP_CONFIG || {};
+  var configured = cfg.SUPABASE_URL && cfg.SUPABASE_URL.indexOf("PASTE_") !== 0;
+  var sb = (configured && window.supabase) ? window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {auth:{persistSession:false,autoRefreshToken:false}}) : null;
+
+  var $ = function(id){return document.getElementById(id)};
+  var rating = 0;
+  var words = ["","A quiet moment","It touched me","It stayed with me","It moved me deeply","It left me speechless"];
+
+  // stars
+  var starBox = $("stars");
+  for (var i=1;i<=5;i++){
+    var b = document.createElement("button");
+    b.type="button"; b.className="star"; b.textContent="★";
+    b.setAttribute("role","radio"); b.setAttribute("aria-checked","false");
+    b.setAttribute("aria-label", i+" star"+(i>1?"s":""));
+    b.dataset.v = i;
+    b.addEventListener("click", function(){ setRating(+this.dataset.v); });
+    starBox.appendChild(b);
+  }
+  function setRating(v){
+    rating = v;
+    [].forEach.call(starBox.children, function(s){
+      var on = +s.dataset.v <= v;
+      s.classList.toggle("on", on);
+      s.setAttribute("aria-checked", (+s.dataset.v === v) ? "true":"false");
+    });
+    $("rate-text").textContent = words[v];
+    $("err-rating").textContent = "";
+  }
+
+  $("comment").addEventListener("input", function(){ $("count").textContent = this.value.length; });
+  [].forEach.call(document.querySelectorAll('input[name=emotion]'), function(r){
+    r.addEventListener("change", function(){ $("err-emotion").textContent=""; });
+  });
+
+  function showBanner(msg){ var b=$("banner"); b.textContent=msg; b.style.display="block"; b.scrollIntoView({behavior:"smooth",block:"center"}); }
+  function hideBanner(){ $("banner").style.display="none"; }
+  function setLoading(on){
+    var btn=$("submit"); btn.disabled=on; btn.classList.toggle("loading",on);
+    $("submit-label").textContent = on ? "SENDING…" : "LEAVE A PIECE OF YOURSELF ✨";
+  }
+
+  $("form").addEventListener("submit", async function(e){
+    e.preventDefault(); hideBanner();
+    var emotionEl = document.querySelector('input[name=emotion]:checked');
+    var ok = true;
+    $("err-emotion").textContent=""; $("err-rating").textContent=""; $("err-contact").textContent="";
+    if(!emotionEl){ $("err-emotion").textContent="Please choose how it felt."; ok=false; }
+    if(!rating){ $("err-rating").textContent="Please tap a star rating."; ok=false; }
+    var contact = $("contact").value.trim();
+    if(contact){
+      var isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contact);
+      var digits = contact.replace(/[\s\-+().]/g,"");
+      var isPhone = /^\d{7,15}$/.test(digits);
+      if(!isEmail && !isPhone){ $("err-contact").textContent="That doesn't look like an email or phone number. You can leave it blank."; ok=false; }
+    }
+    if(!ok){ var f=document.querySelector(".err:not(:empty)"); if(f) f.scrollIntoView({behavior:"smooth",block:"center"}); return; }
+
+    // spam trap filled => pretend success, store nothing
+    if($("website").value){ finish(); return; }
+
+    if(!sb){ showBanner("This site is not connected to its database yet. Please tell the organiser."); return; }
+
+    var spoke = [].map.call(document.querySelectorAll('input[name=spoke]:checked'), function(c){return c.value});
+    var payload = {
+      emotion: emotionEl.value,
+      rating: rating,
+      spoke_to: spoke,
+      comment: $("comment").value.trim() || null,
+      name: $("name").value.trim() || null,
+      contact: contact || null
+    };
+
+    setLoading(true);
+    try{
+      var res = await sb.from("feedback").insert(payload);   // no .select(): visitors can never read data back
+      if(res.error) throw res.error;
+      finish();
+    }catch(err){
+      console.error(err);
+      var offline = !navigator.onLine;
+      showBanner(offline ? "You seem to be offline. Please check your connection and try again."
+                         : "Sorry, we couldn't save that just now. Your answers are still here. Please try again in a moment.");
+    }finally{ setLoading(false); }
+  });
+
+  function finish(){
+    $("form").style.display="none";
+    var t=$("thanks"); t.style.display="block"; t.classList.add("fade");
+    window.scrollTo({top:0,behavior:"smooth"});
+  }
+})();
+</script>
+</body>
+</html>

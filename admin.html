@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Admin · Art Speaks Where Words End</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginView" class="login wrap" style="display:none">
+  <p class="eyebrow">Private</p>
+  <h1 style="font-size:40px">Admin</h1>
+  <form id="loginForm" class="card" style="margin-top:24px" novalidate>
+    <div class="field"><label for="email">Email</label><input type="text" id="email" inputmode="email" autocomplete="username"></div>
+    <div class="field"><label for="password">Password</label><input type="password" id="password" autocomplete="current-password" style="width:100%;font:inherit;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px"></div>
+    <p class="err" id="loginErr"></p>
+    <button class="btn" type="submit" id="loginBtn"><span id="loginLabel">SIGN IN</span></button>
+  </form>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dash" class="admin" style="display:none">
+  <div class="top">
+    <h1>Feedback</h1>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn small" id="csvBtn" type="button">EXPORT CSV</button>
+      <button class="btn small ghost" id="outBtn" type="button">SIGN OUT</button>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+  <div class="grid2">
+    <div class="card"><div class="label" style="font-size:20px">Feelings</div><div class="bars" id="emoBars"></div></div>
+    <div class="card"><div class="label" style="font-size:20px">Ratings</div><div class="bars" id="rateBars"></div></div>
+  </div>
+
+  <div class="filters">
+    <input class="wide" type="text" id="q" placeholder="Search comments, names, contacts…">
+    <select id="fEmotion"><option value="">All feelings</option>
+      <option value="peaceful">🤍 Peaceful</option><option value="emotional">🥹 Emotional</option>
+      <option value="inspired">🤩 Inspired</option><option value="thoughtful">💭 Thoughtful</option>
+      <option value="amazed">😍 Amazed</option><option value="happy">🙂 Happy</option></select>
+    <select id="fRating"><option value="">All ratings</option>
+      <option value="5">5 stars</option><option value="4">4 stars</option><option value="3">3 stars</option>
+      <option value="2">2 stars</option><option value="1">1 star</option></select>
+    <select id="fContact"><option value="">All entries</option><option value="yes">With contact details</option><option value="no">Anonymous only</option></select>
+  </div>
+  <p class="meta" id="shown" style="font-size:13px;color:var(--muted)"></p>
+  <div id="list"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+(function(){
+  var cfg = window.APP_CONFIG || {};
+  var $ = function(id){return document.getElementById(id)};
+  var EMO = {peaceful:"🤍 Peaceful",emotional:"🥹 Emotional",inspired:"🤩 Inspired",thoughtful:"💭 Thoughtful",amazed:"😍 Amazed",happy:"🙂 Happy"};
+  var SPOKE = {artwork:"Artwork",creativity:"Creativity",concept:"Concept",display:"Exhibition Display"};
+  var rows = [];
+
+  if(!cfg.SUPABASE_URL || cfg.SUPABASE_URL.indexOf("PASTE_")===0){
+    $("loginView").style.display="block";
+    $("loginErr").textContent="Database not configured yet.";
+    return;
+  }
+  var sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+
+  function show(which){ $("loginView").style.display = which==="login"?"block":"none"; $("dash").style.display = which==="dash"?"block":"none"; }
+
+  async function init(){
+    var s = await sb.auth.getSession();
+    if(s.data && s.data.session){ await load(); } else { show("login"); }
+  }
+
+  $("loginForm").addEventListener("submit", async function(e){
+    e.preventDefault(); $("loginErr").textContent="";
+    var b=$("loginBtn"); b.disabled=true; $("loginLabel").textContent="SIGNING IN…";
+    var r = await sb.auth.signInWithPassword({email:$("email").value.trim(), password:$("password").value});
+    b.disabled=false; $("loginLabel").textContent="SIGN IN";
+    if(r.error){ $("loginErr").textContent="Sign-in failed. Check your email and password."; return; }
+    $("password").value="";
+    await load();
+  });
+
+  $("outBtn").addEventListener("click", async function(){ await sb.auth.signOut(); rows=[]; show("login"); });
+
+  async function load(){
+    // The database itself only returns rows if this user is in the admins table.
+    var r = await sb.from("feedback").select("*").order("created_at",{ascending:false}).limit(5000);
+    if(r.error){
+      await sb.auth.signOut(); show("login");
+      $("loginErr").textContent="Could not load data: "+r.error.message; return;
+    }
+    // If a signed-in non-admin gets zero rows AND is not an admin, we can't tell from rows alone; ask the DB.
+    var a = await sb.rpc("is_admin");
+    if(a.error || a.data !== true){
+      await sb.auth.signOut(); show("login");
+      $("loginErr").textContent="This account is not authorised."; return;
+    }
+    rows = r.data || [];
+    show("dash"); render();
+  }
+
+  function esc(s){ return s==null ? "" : String(s); }
+  function el(tag, cls, text){ var e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
+
+  function filtered(){
+    var q = $("q").value.trim().toLowerCase(), fe=$("fEmotion").value, fr=$("fRating").value, fc=$("fContact").value;
+    return rows.filter(function(r){
+      if(fe && r.emotion!==fe) return false;
+      if(fr && String(r.rating)!==fr) return false;
+      if(fc==="yes" && !(r.name||r.contact)) return false;
+      if(fc==="no" && (r.name||r.contact)) return false;
+      if(q){ var hay=[r.comment,r.name,r.contact].join(" ").toLowerCase(); if(hay.indexOf(q)<0) return false; }
+      return true;
+    });
+  }
+
+  function bars(box, entries, total){
+    box.textContent="";
+    entries.forEach(function(en){
+      var row=el("div","bar"); row.appendChild(el("span","lab",en[0]));
+      var tr=el("span","track"), f=el("span","fill"); f.style.width = (total? (en[1]/total*100):0)+"%"; tr.appendChild(f);
+      row.appendChild(tr); row.appendChild(el("span","v",String(en[1]))); box.appendChild(row);
+    });
+  }
+
+  function render(){
+    var all=rows, n=all.length;
+    var avg = n ? (all.reduce(function(a,r){return a+r.rating},0)/n) : 0;
+    var withC = all.filter(function(r){return r.name||r.contact}).length;
+    var withT = all.filter(function(r){return r.comment}).length;
+    var st=$("stats"); st.textContent="";
+    [[String(n),"Total responses"],[n?avg.toFixed(2)+" ★":"–","Average rating"],[String(withT),"With a message"],[String(withC),"Shared contact details"]].forEach(function(s){
+      var c=el("div","card stat"); c.appendChild(el("div","n",s[0])); c.appendChild(el("div","t",s[1])); st.appendChild(c);
+    });
+    var ec={}; all.forEach(function(r){ec[r.emotion]=(ec[r.emotion]||0)+1});
+    bars($("emoBars"), Object.keys(EMO).map(function(k){return [EMO[k], ec[k]||0]}), n);
+    var rc={1:0,2:0,3:0,4:0,5:0}; all.forEach(function(r){rc[r.rating]++});
+    bars($("rateBars"), [5,4,3,2,1].map(function(k){return [k+" ★", rc[k]]}), n);
+
+    var list=filtered(), box=$("list"); box.textContent="";
+    $("shown").textContent = "Showing "+list.length+" of "+n;
+    if(!list.length){ box.appendChild(el("div","empty", n? "No matches for these filters.":"No feedback yet.")); return; }
+    list.forEach(function(r){
+      var it=el("div","item"), r1=el("div","row1"), left=el("div");
+      left.appendChild(el("div","stars-s","★".repeat(r.rating)+"☆".repeat(5-r.rating)));
+      left.appendChild(el("div","meta", (EMO[r.emotion]||r.emotion)+" · "+new Date(r.created_at).toLocaleString()));
+      var del=el("button","del","Delete"); del.type="button";
+      del.addEventListener("click", function(){ remove(r.id); });
+      r1.appendChild(left); r1.appendChild(del); it.appendChild(r1);
+      (r.spoke_to||[]).forEach(function(s){ it.appendChild(el("span","tag",SPOKE[s]||s)); });
+      if(r.comment) it.appendChild(el("p",null,r.comment));
+      if(r.name||r.contact){ it.appendChild(el("div","contact","Contact (volunteered): "+[r.name,r.contact].filter(Boolean).join(" · "))); }
+      box.appendChild(it);
+    });
+  }
+
+  async function remove(id){
+    if(!confirm("Delete this response permanently?")) return;
+    var r = await sb.from("feedback").delete().eq("id",id).select();
+    if(r.error || !r.data || !r.data.length){ alert("Could not delete."); return; }
+    rows = rows.filter(function(x){return x.id!==id}); render();
+  }
+
+  ["q","fEmotion","fRating","fContact"].forEach(function(id){ $(id).addEventListener("input", render); });
+
+  function csvCell(v){
+    var s = v==null ? "" : String(v);
+    if(/^[=+\-@\t\r]/.test(s)) s = "'"+s;          // stop spreadsheet formula injection
+    return '"'+s.replace(/"/g,'""')+'"';
+  }
+  $("csvBtn").addEventListener("click", function(){
+    var list=filtered();
+    var head=["Date","Emotion","Rating","What spoke to them","Comment","Name","Contact"];
+    var lines=[head.map(csvCell).join(",")];
+    list.forEach(function(r){
+      lines.push([new Date(r.created_at).toISOString(), r.emotion, r.rating, (r.spoke_to||[]).join("; "), r.comment, r.name, r.contact].map(csvCell).join(","));
+    });
+    var blob=new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
+    var a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download="feedback-"+new Date().toISOString().slice(0,10)+".csv";
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+
+  init();
+})();
+</script>
+</body>
+</html>

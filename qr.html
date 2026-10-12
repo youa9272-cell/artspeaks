@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QR & Poster</title>
+<meta name="robots" content="noindex,nofollow">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,400&family=Inter:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="admin" style="max-width:640px">
+  <h1>QR code &amp; poster</h1>
+  <p class="hint" id="urlline"></p>
+  <div class="banner" id="warn"></div>
+  <canvas id="preview" style="width:100%;height:auto;border:1px solid var(--line);border-radius:12px;background:#fff"></canvas>
+  <div style="display:grid;gap:10px;margin-top:16px">
+    <button class="btn" id="dlQr" type="button">DOWNLOAD QR (PNG)</button>
+    <button class="btn ghost" id="dlPoster" type="button">DOWNLOAD POSTER (PNG, A4 print)</button>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>
+(function(){
+  var url = location.origin + "/";                 // always the real address this page is opened from
+  document.getElementById("urlline").textContent = "QR points to: " + url;
+  var bad = location.protocol !== "https:" || /localhost|127\.0\.0\.1|^file:/.test(location.href);
+  if(bad){ var w=document.getElementById("warn"); w.style.display="block"; w.textContent="Open this page from your PUBLIC https address before downloading. This address is not valid for a final QR."; }
+  if(typeof qrcode === "undefined"){ document.getElementById("warn").style.display="block"; document.getElementById("warn").textContent="QR library failed to load. Check your internet and reload."; return; }
+
+  var qr = qrcode(0,"H"); qr.addData(url); qr.make();
+  var n = qr.getModuleCount();
+
+  function drawQr(ctx,x,y,size){
+    var quiet = 4, cells = n + quiet*2, cs = size / cells;
+    ctx.fillStyle="#fff"; ctx.fillRect(x,y,size,size);
+    ctx.fillStyle="#2B2A28";
+    for(var r=0;r<n;r++)for(var c=0;c<n;c++){ if(qr.isDark(r,c)) ctx.fillRect(Math.round(x+(c+quiet)*cs),Math.round(y+(r+quiet)*cs),Math.ceil(cs),Math.ceil(cs)); }
+  }
+  function qrCanvas(px){ var cv=document.createElement("canvas"); cv.width=cv.height=px; drawQr(cv.getContext("2d"),0,0,px); return cv; }
+
+  function posterCanvas(){
+    var W=2480,H=3508, cv=document.createElement("canvas"); cv.width=W; cv.height=H;
+    var g=cv.getContext("2d");
+    g.fillStyle="#F7F2E9"; g.fillRect(0,0,W,H);
+    g.strokeStyle="#B65F42"; g.lineWidth=4; g.strokeRect(120,120,W-240,H-240);
+    g.textAlign="center"; g.fillStyle="#2B2A28";
+    g.font='500 190px "Cormorant Garamond", Georgia, serif';
+    g.fillText("ART SPEAKS",W/2,760);
+    g.fillStyle="#B65F42"; g.font='italic 400 190px "Cormorant Garamond", Georgia, serif';
+    g.fillText("WHERE WORDS END",W/2,980);
+    g.fillStyle="#B65F42"; g.fillRect(W/2-90,1100,180,4);
+    var qs=1500; var qx=(W-qs)/2, qy=1300;
+    g.fillStyle="#fff"; g.fillRect(qx-40,qy-40,qs+80,qs+80);
+    drawQr(g,qx,qy,qs);
+    g.fillStyle="#2B2A28"; g.font='italic 400 120px "Cormorant Garamond", Georgia, serif';
+    g.fillText("“Scan to share what you felt.”",W/2,3040);
+    g.fillStyle="#6B6761"; g.font='500 44px Inter, Arial, sans-serif';
+    g.fillText(url.replace(/^https:\/\//,"").replace(/\/$/,""),W/2,3200);
+    return cv;
+  }
+
+  var pv=document.getElementById("preview"); var p=posterCanvas(); pv.width=p.width/3; pv.height=p.height/3;
+  pv.getContext("2d").drawImage(p,0,0,pv.width,pv.height);
+
+  function save(cv,name){ cv.toBlob(function(b){ var a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=name; document.body.appendChild(a); a.click(); a.remove(); },"image/png"); }
+  document.getElementById("dlQr").onclick=function(){ save(qrCanvas(1200),"art-speaks-qr.png"); };
+  document.getElementById("dlPoster").onclick=function(){ save(posterCanvas(),"art-speaks-poster-A4.png"); };
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ var p2=posterCanvas(); pv.getContext("2d").drawImage(p2,0,0,pv.width,pv.height); });
+})();
+</script>
+</body>
+</html>
